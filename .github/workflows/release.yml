@@ -1,0 +1,58 @@
+name: Build Windows Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example v1.0.0"
+        required: true
+        default: "v1.0.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Create virtual environment
+        shell: pwsh
+        run: python -m venv .venv
+
+      - name: Build Windows application
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\build_windows.ps1
+
+      - name: Run tests
+        shell: pwsh
+        run: .\.venv\Scripts\python.exe -m unittest discover -s tests -v
+
+      - name: Create ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path .\dist\InstagramFollowTracker `
+            -DestinationPath .\InstagramFollowerTracker-Windows.zip `
+            -CompressionLevel Optimal
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.version }}
+        run: |
+          gh release create "$env:RELEASE_TAG" `
+            ".\InstagramFollowerTracker-Windows.zip" `
+            --title "Instagram Follower Tracker $env:RELEASE_TAG" `
+            --generate-notes `
+            --target main
