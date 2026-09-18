@@ -1,10 +1,10 @@
-# Instagram Follow Tracker
+# Instagram Follower Tracker
 
 A local desktop tool for recording changes in an Instagram account's Followers and Following lists.
 
 The application uses Playwright to control Chromium and stores each successful scan in SQLite. It does not use an unofficial Instagram API, save passwords, or run as a background service.
 
-![Instagram Follow Tracker desktop interface](docs/gui.png)
+![Instagram Follower Tracker desktop interface](docs/gui.png)
 
 ## Features
 

@@ -1,4 +1,4 @@
-"""Command-line entry point for Instagram Follow Tracker."""
+"""Command-line entry point for Instagram Follower Tracker."""
 
 from __future__ import annotations
 

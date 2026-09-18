@@ -1,4 +1,4 @@
-"""Tkinter desktop interface for Instagram Follow Tracker."""
+"""Tkinter desktop interface for Instagram Follower Tracker."""
 
 from __future__ import annotations
 
@@ -268,7 +268,7 @@ class TrackerGUI:
         return _pick(self.language, english, chinese)
 
     def _configure_window(self) -> None:
-        self.root.title("Instagram Follow Tracker")
+        self.root.title("Instagram Follower Tracker")
         self.root.geometry("980x700")
         self.root.minsize(800, 560)
         style = ttk.Style(self.root)
@@ -286,7 +286,7 @@ class TrackerGUI:
         header.columnconfigure(0, weight=1)
         ttk.Label(
             header,
-            text="Instagram Follow Tracker",
+            text="Instagram Follower Tracker",
             font=("Segoe UI", 17, "bold"),
         ).grid(row=0, column=0, sticky=tk.W)
         self.language_label = ttk.Label(header)

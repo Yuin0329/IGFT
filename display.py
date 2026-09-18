@@ -28,7 +28,7 @@ def format_time(value: datetime | None) -> str:
 
 
 def print_header() -> None:
-    print(f"Instagram Follow Tracker\n{RULE}\n")
+    print(f"Instagram Follower Tracker\n{RULE}\n")
 
 
 def _print_name_group(title: str, names: frozenset[str], marker: str) -> None:
@@ -178,4 +178,3 @@ def print_validation_warning(issues: tuple[ValidationIssue, ...]) -> None:
         print(f"Current captured {label.lower()}: {issue.current_count}")
         print(f"Minimum accepted ratio: {issue.minimum_ratio:.0%}\n")
     print("Snapshot was NOT saved.")
-

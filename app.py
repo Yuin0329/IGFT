@@ -24,7 +24,7 @@ def main() -> int:
         root = tk.Tk()
         root.withdraw()
         messagebox.showerror(
-            "Instagram Follow Tracker",
+            "Instagram Follower Tracker",
             f"The application could not start:\n\n{exc}\n\n"
             "See logs/tracker.log for details.",
             parent=root,
