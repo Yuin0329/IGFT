@@ -55,6 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser(
         "login", help="Open the persistent Chromium profile for manual login only"
     )
+    subparsers.add_parser("gui", help="Open the desktop interface")
     subparsers.add_parser("changes", help="Show changes from the latest scan")
     subparsers.add_parser(
         "nonfollowers", help="Show accounts you follow that do not follow you"
@@ -168,6 +169,19 @@ def run_login() -> int:
     return 0
 
 
+def run_gui(database: TrackerDatabase) -> int:
+    """Open the Tkinter desktop interface."""
+
+    try:
+        from gui import launch_gui
+    except (ImportError, ModuleNotFoundError) as exc:
+        LOGGER.exception("Could not import the desktop interface: %s", exc)
+        print(f"ERROR: The desktop interface is unavailable: {exc}")
+        return 1
+    launch_gui(database)
+    return 0
+
+
 def run_changes(database: TrackerDatabase) -> int:
     latest = _load_latest_or_print(database)
     if latest is None:
@@ -215,6 +229,8 @@ def dispatch(args: argparse.Namespace, database: TrackerDatabase) -> int:
         return run_status(database)
     if args.command == "login":
         return run_login()
+    if args.command == "gui":
+        return run_gui(database)
     if args.command == "changes":
         return run_changes(database)
     if args.command == "nonfollowers":

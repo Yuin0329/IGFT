@@ -5,12 +5,17 @@ from __future__ import annotations
 import unittest
 
 try:
-    from scraper import RELATIONSHIP_TEXT_PATTERNS, extract_username_from_profile_url
+    from scraper import (
+        RELATIONSHIP_TEXT_PATTERNS,
+        extract_username_from_profile_url,
+        parse_relationship_count,
+    )
 except ModuleNotFoundError as exc:
     if exc.name != "playwright":
         raise
     extract_username_from_profile_url = None  # type: ignore[assignment]
     RELATIONSHIP_TEXT_PATTERNS = None  # type: ignore[assignment]
+    parse_relationship_count = None  # type: ignore[assignment]
 
 
 @unittest.skipIf(extract_username_from_profile_url is None, "Playwright is not installed")
@@ -42,6 +47,13 @@ class ProfileUrlTests(unittest.TestCase):
         self.assertIsNotNone(RELATIONSHIP_TEXT_PATTERNS["followers"].search("154 followers"))
         self.assertIsNotNone(RELATIONSHIP_TEXT_PATTERNS["following"].search("390追蹤中"))
         self.assertIsNotNone(RELATIONSHIP_TEXT_PATTERNS["following"].search("390 following"))
+
+    def test_parses_relationship_counts(self) -> None:
+        assert parse_relationship_count is not None
+        self.assertEqual(parse_relationship_count("390 following"), 390)
+        self.assertEqual(parse_relationship_count("1,234 followers"), 1234)
+        self.assertEqual(parse_relationship_count("1.2K followers"), 1200)
+        self.assertIsNone(parse_relationship_count("following"))
 
 
 if __name__ == "__main__":

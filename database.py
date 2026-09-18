@@ -138,6 +138,43 @@ class TrackerDatabase:
         except sqlite3.Error as exc:
             raise DatabaseError(f"Could not initialize database: {exc}") from exc
 
+    def clear_all_data(self) -> tuple[int, int]:
+        """Atomically remove all tracker history while preserving the schema."""
+
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            snapshot_count = int(
+                connection.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0]
+            )
+            account_count = int(
+                connection.execute("SELECT COUNT(*) FROM accounts").fetchone()[0]
+            )
+            connection.execute("DELETE FROM events")
+            connection.execute("DELETE FROM snapshot_accounts")
+            connection.execute("DELETE FROM snapshots")
+            connection.execute("DELETE FROM accounts")
+            connection.execute(
+                """
+                DELETE FROM sqlite_sequence
+                WHERE name IN ('snapshots', 'accounts', 'events')
+                """
+            )
+            connection.commit()
+            LOGGER.warning(
+                "Tracker database cleared: %s snapshots and %s accounts removed",
+                snapshot_count,
+                account_count,
+            )
+            return snapshot_count, account_count
+        except sqlite3.Error as exc:
+            connection.rollback()
+            raise DatabaseError(
+                f"Could not clear the database; no data was removed: {exc}"
+            ) from exc
+        finally:
+            connection.close()
+
     def get_latest_snapshot(self) -> Snapshot | None:
         """Return the newest snapshot, or None before the first scan."""
 

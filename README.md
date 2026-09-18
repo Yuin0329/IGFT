@@ -1,6 +1,6 @@
 # Instagram Follow Tracker
 
-Instagram Follow Tracker is a local command-line tool for recording changes in an Instagram account's follower relationships.
+Instagram Follow Tracker is a local desktop and command-line tool for recording changes in an Instagram account's follower relationships.
 
 The tool uses Playwright to open the Instagram website in Chromium, collects the complete Followers and Following lists, and stores each successful scan in SQLite. Later scans are compared with the previous snapshot to identify new followers, unfollows, and other relationship changes.
 
@@ -17,6 +17,7 @@ It does not use an unofficial Instagram API, store account passwords, or run as 
 - Distinguishes accounts that never followed back from accounts that were previously mutual
 - Reuses a persistent Chromium profile for future scans
 - Rejects suspiciously incomplete results before they are written to the database
+- Includes a Tkinter desktop interface for everyday use
 
 ## Requirements
 
@@ -44,6 +45,24 @@ python -m venv .venv
 ```
 
 The examples in this README use the Python executable inside `.venv` directly, so activating the virtual environment is optional.
+
+## Desktop Interface
+
+Start the Tkinter interface with:
+
+```powershell
+.\.venv\Scripts\python.exe main.py gui
+```
+
+Enter the logged-in Instagram username in the field at the top of the window before starting a scan. The interface provides buttons for manual login, scanning, latest status, recent changes, non-followers, mutual followers, account history, and clearing saved data.
+
+To view account history, replace the username in the field with the account you want to inspect, then select **Account History**. The account must have appeared in at least one saved Followers or Following list. Your own username normally has no account-history entry because it is not part of either relationship list.
+
+The **Clear Database** button removes all snapshots, events, and stored account history after displaying a confirmation dialog. It does not remove the saved Instagram login session. The next successful scan becomes a new initial snapshot.
+
+Login and scan operations run in the background so the window remains responsive. If the saved session has expired or Instagram requires a security check, use **Open Login Browser**, complete the login manually, close Chromium, and then start the scan again.
+
+The command-line interface remains available for scripting and troubleshooting.
 
 ## Usage
 
@@ -124,7 +143,7 @@ The first scan establishes the initial state. Change events are generated from t
 
 ## Incomplete Scan Protection
 
-Instagram loads Followers and Following gradually. The scraper collects unique usernames while scrolling the list and stops only after several consecutive rounds produce no new accounts. A maximum number of rounds and timeouts prevent an infinite loop.
+Instagram loads Followers and Following gradually. The scraper collects unique usernames while scrolling the list and stops only after several consecutive rounds produce no new accounts. A maximum number of rounds and timeouts prevent an infinite loop. If fewer accounts are captured than the count displayed by Instagram, the list is collected again; a result that remains incomplete is not saved.
 
 Before saving a new snapshot, Followers and Following are validated separately against the previous scan. If either list falls below 70% of its previous size, the result is considered incomplete and is not saved.
 
@@ -192,6 +211,22 @@ python -m venv .venv
 ```
 
 上述安裝流程只需執行一次。
+
+### 開啟圖形介面
+
+```powershell
+.\.venv\Scripts\python.exe main.py gui
+```
+
+在視窗上方輸入目前登入的 Instagram 帳號名稱，即可使用按鈕執行登入、掃描、查看最新狀態、最近變動、未回追名單與互追名單。
+
+「帳號歷史」用來查詢特定帳號過去的關係變化。請將上方欄位改為要查詢的對方帳號，再按下「帳號歷史」。該帳號必須曾出現在已儲存的 Followers 或 Following 名單中；自己的帳號通常不會出現在這兩份名單，因此不會有帳號歷史。
+
+若要捨棄現有紀錄並重新建立比較基準，可以按下「清空資料庫」。程式會先顯示確認視窗，確認後才會刪除所有 Snapshot、變動事件與帳號歷史。此操作不會清除 Instagram 登入狀態；下一次成功掃描會成為新的初始 Snapshot。
+
+第一次使用或登入狀態過期時，先按「開啟登入瀏覽器」。完成登入並關閉 Chromium 後，再回到程式按「開始掃描」。掃描會在背景執行，不會凍結視窗。
+
+下列 CLI 指令仍可正常使用。
 
 ### 登入 Instagram
 

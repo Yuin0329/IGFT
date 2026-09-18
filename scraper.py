@@ -145,6 +145,10 @@ root => {
 }
 """.replace("__SCROLL_CANDIDATES__", SELECTORS.scroll_candidates)
 
+RELATIONSHIP_COUNT_PATTERN = re.compile(
+    r"(?P<number>\d[\d,\s]*(?:\.\d+)?)\s*(?P<suffix>[km]?)", re.IGNORECASE
+)
+
 
 def extract_username_from_profile_url(url: str) -> str | None:
     """Extract a normalized username from a direct Instagram profile URL.
@@ -173,6 +177,21 @@ def canonical_profile_url(username: str) -> str:
     """Build the canonical public web profile URL for a normalized username."""
 
     return f"{config.INSTAGRAM_BASE_URL}{normalize_username(username)}/"
+
+
+def parse_relationship_count(text: str) -> int | None:
+    """Parse the count shown in an Instagram relationship control."""
+
+    match = RELATIONSHIP_COUNT_PATTERN.search(text.replace("\u00a0", " "))
+    if match is None:
+        return None
+    number_text = re.sub(r"[,\s]", "", match.group("number"))
+    try:
+        number = float(number_text)
+    except ValueError:
+        return None
+    multiplier = {"": 1, "k": 1_000, "m": 1_000_000}[match.group("suffix").lower()]
+    return int(number * multiplier)
 
 
 def open_manual_login_browser() -> int:
@@ -213,10 +232,15 @@ def open_manual_login_browser() -> int:
 class InstagramScraper:
     """Run one foreground scan in a visible persistent Chromium context."""
 
-    def __init__(self, requested_username: str | None = None) -> None:
+    def __init__(
+        self,
+        requested_username: str | None = None,
+        interactive_login: bool = True,
+    ) -> None:
         self.requested_username = (
             normalize_username(requested_username) if requested_username else None
         )
+        self.interactive_login = interactive_login
         if self.requested_username and not USERNAME_PATTERN.fullmatch(
             self.requested_username
         ):
@@ -275,6 +299,11 @@ class InstagramScraper:
     def _wait_for_manual_login(self, page: Page) -> None:
         """Keep the browser open while the user completes login interactively."""
 
+        if not self.interactive_login:
+            raise InstagramAuthenticationError(
+                "The Instagram session has expired. Use the Login button, complete "
+                "the manual login, close Chromium, and start the scan again."
+            )
         print(
             "\nPlease log in to Instagram in the opened browser.\n\n"
             "After login is complete, press ENTER here."
@@ -297,6 +326,11 @@ class InstagramScraper:
             )
 
     def _pause_for_security_check(self) -> None:
+        if not self.interactive_login:
+            raise InstagramSecurityCheckError(
+                "Instagram requires a CAPTCHA, 2FA, checkpoint, or security challenge. "
+                "Use the Login button and complete it manually before scanning again."
+            )
         print(
             "\nInstagram requires a CAPTCHA, 2FA, checkpoint, or security challenge.\n"
             "Complete it manually in the opened browser, then press ENTER here.\n"
@@ -434,16 +468,46 @@ class InstagramScraper:
     ) -> dict[str, Account]:
         if relationship_path not in {"followers", "following"}:
             raise ValueError(f"Unsupported relationship: {relationship_path}")
-        dialog = self._open_relationship_modal(page, username, relationship_path)
-        try:
-            accounts = self._scroll_and_collect(page, dialog, relationship_path)
-        finally:
-            self._close_modal(page, dialog)
-        return accounts
+        accounts: dict[str, Account] = {}
+        displayed_count: int | None = None
+
+        for attempt in range(1, config.MAX_LIST_CAPTURE_ATTEMPTS + 1):
+            dialog, current_displayed_count = self._open_relationship_modal(
+                page, username, relationship_path
+            )
+            if displayed_count is None:
+                displayed_count = current_displayed_count
+            try:
+                captured = self._scroll_and_collect(
+                    page,
+                    dialog,
+                    relationship_path,
+                    previously_captured=set(accounts),
+                    stop_at_count=displayed_count if attempt > 1 else None,
+                )
+            finally:
+                self._close_modal(page, dialog)
+            accounts.update(captured)
+
+            if displayed_count is None or len(accounts) >= displayed_count:
+                return accounts
+            LOGGER.warning(
+                "%s capture attempt %s found %s of %s displayed accounts; retrying",
+                relationship_path.capitalize(),
+                attempt,
+                len(accounts),
+                displayed_count,
+            )
+
+        raise InstagramIncompleteListError(
+            f"Instagram shows {displayed_count} {relationship_path}, but only "
+            f"{len(accounts)} unique accounts were captured after "
+            f"{config.MAX_LIST_CAPTURE_ATTEMPTS} attempts. The snapshot was not saved."
+        )
 
     def _open_relationship_modal(
         self, page: Page, username: str, relationship_path: str
-    ) -> Locator:
+    ) -> tuple[Locator, int | None]:
         expected_path = f"/{username}/{relationship_path}/".lower()
         links = page.locator(SELECTORS.all_links)
         target: Locator | None = None
@@ -475,6 +539,7 @@ class InstagramScraper:
                 "No snapshot was saved."
             )
 
+        displayed_count = parse_relationship_count(target.inner_text())
         try:
             target.scroll_into_view_if_needed()
             target.click()
@@ -483,7 +548,7 @@ class InstagramScraper:
             raise InstagramDOMError(
                 f"The {relationship_path} modal did not open. Instagram's DOM may have changed."
             ) from exc
-        return dialog
+        return dialog, displayed_count
 
     @staticmethod
     def _wait_for_visible_dialog(page: Page) -> Locator:
@@ -498,10 +563,21 @@ class InstagramScraper:
         raise PlaywrightTimeoutError("No visible relationship dialog appeared")
 
     def _scroll_and_collect(
-        self, page: Page, dialog: Locator, relationship_path: str
+        self,
+        page: Page,
+        dialog: Locator,
+        relationship_path: str,
+        previously_captured: set[str] | None = None,
+        stop_at_count: int | None = None,
     ) -> dict[str, Account]:
         accounts = self._wait_for_initial_list_state(page, dialog, relationship_path)
         seen_usernames: set[str] = set(accounts)
+        previously_captured = previously_captured or set()
+        if (
+            stop_at_count is not None
+            and len(previously_captured | seen_usernames) >= stop_at_count
+        ):
+            return accounts
         no_change_rounds = 0
 
         for round_number in range(1, config.MAX_SCROLL_ROUNDS + 1):
@@ -520,6 +596,17 @@ class InstagramScraper:
             accounts.update(visible_accounts)
             seen_usernames.update(visible_accounts)
             current_count = len(seen_usernames)
+
+            if (
+                stop_at_count is not None
+                and len(previously_captured | seen_usernames) >= stop_at_count
+            ):
+                LOGGER.info(
+                    "%s retry reached the displayed count of %s",
+                    relationship_path.capitalize(),
+                    stop_at_count,
+                )
+                return accounts
 
             if current_count == before_count:
                 no_change_rounds += 1

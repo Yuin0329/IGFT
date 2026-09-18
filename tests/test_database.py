@@ -89,6 +89,28 @@ class DatabaseTests(unittest.TestCase):
         assert latest is not None
         self.assertEqual(latest.id, second.current.id)
 
+    def test_clear_all_data_preserves_schema_and_resets_history(self) -> None:
+        saved = self.database.commit_snapshot(
+            followers={"alice": account("alice")},
+            following={"bob": account("bob")},
+            expected_previous_id=None,
+        )
+        self.assertEqual(saved.current.id, 1)
+
+        snapshot_count, account_count = self.database.clear_all_data()
+
+        self.assertEqual(snapshot_count, 1)
+        self.assertEqual(account_count, 2)
+        self.assertIsNone(self.database.get_latest_snapshot())
+        self.assertIsNone(self.database.get_account_history("alice"))
+
+        replacement = self.database.commit_snapshot(
+            followers={},
+            following={},
+            expected_previous_id=None,
+        )
+        self.assertEqual(replacement.current.id, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
