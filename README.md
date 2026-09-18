@@ -6,6 +6,10 @@ The application uses Playwright to control Chromium and stores each successful s
 
 ![Instagram Follower Tracker desktop interface](docs/gui.png)
 
+## Download
+
+[**Download for Windows**](https://github.com/Yuin0329/IGFT/releases/latest/download/InstagramFollowerTracker-Windows.zip)
+
 ## Features
 
 - Historical Followers and Following snapshots
