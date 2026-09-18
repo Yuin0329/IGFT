@@ -1,30 +1,30 @@
 # Instagram Follow Tracker
 
-Instagram Follow Tracker is a local desktop and command-line tool for recording changes in an Instagram account's follower relationships.
+Instagram Follow Tracker is a local desktop application that records changes in an Instagram account's Followers and Following lists.
 
-The tool uses Playwright to open the Instagram website in Chromium, collects the complete Followers and Following lists, and stores each successful scan in SQLite. Later scans are compared with the previous snapshot to identify new followers, unfollows, and other relationship changes.
+The application opens Instagram in Chromium through Playwright and stores each successful scan in SQLite. Later scans are compared with the previous snapshot to identify new followers, unfollows, and changes made to your Following list.
 
-It does not use an unofficial Instagram API, store account passwords, or run as a background service. All data remains on the local computer.
+It does not use an unofficial Instagram API, store account passwords, or run in the background. Account data and browser sessions remain on the local computer.
 
-> For setup instructions in Traditional Chinese, see [中文操作說明](#中文操作說明).
+> For setup and operating instructions in Traditional Chinese, see [中文操作說明](#中文操作說明).
 
 ## Features
 
-- Stores every completed scan as a historical snapshot
-- Tracks changes in both Followers and Following
-- Lists mutual followers and accounts that do not follow back
-- Records follow and unfollow events for individual accounts
-- Distinguishes accounts that never followed back from accounts that were previously mutual
-- Reuses a persistent Chromium profile for future scans
-- Rejects suspiciously incomplete results before they are written to the database
-- Includes a Tkinter desktop interface for everyday use
+- Desktop interface built with Tkinter
+- Persistent Chromium profile for manual Instagram login
+- Historical snapshots of Followers and Following
+- New follower and unfollow event tracking
+- Mutual and non-follower lists
+- Per-account relationship history
+- Incomplete-scan protection before data is saved
+- Local SQLite storage
 
 ## Requirements
 
 - Windows 11
 - Python 3.10 or later (Python 3.11+ recommended)
 - Playwright Chromium
-- An Instagram account that can be accessed through the desktop website
+- An Instagram account accessible through the desktop website
 
 Visual Studio Code is recommended, but not required.
 
@@ -44,116 +44,57 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m playwright install chromium
 ```
 
-The examples in this README use the Python executable inside `.venv` directly, so activating the virtual environment is optional.
+The installation steps only need to be completed once.
 
-## Desktop Interface
-
-Start the Tkinter interface with:
+## Starting the Application
 
 ```powershell
 .\.venv\Scripts\python.exe main.py gui
 ```
 
-Enter the logged-in Instagram username in the field at the top of the window before starting a scan. The interface provides buttons for manual login, scanning, latest status, recent changes, non-followers, mutual followers, account history, and clearing saved data.
+## Interface Guide
 
-To view account history, replace the username in the field with the account you want to inspect, then select **Account History**. The account must have appeared in at least one saved Followers or Following list. Your own username normally has no account-history entry because it is not part of either relationship list.
+### Account and scan controls
 
-The **Clear Database** button removes all snapshots, events, and stored account history after displaying a confirmation dialog. It does not remove the saved Instagram login session. The next successful scan becomes a new initial snapshot.
+- **Instagram username**: Enter the username of the account currently signed in to Chromium. Do not include `@`.
+- **Open Login Browser**: Opens the persistent Chromium profile. Use it for the first login, an expired session, 2FA, CAPTCHA, or another security check. Close all Chromium windows after login is complete.
+- **Start Scan**: Collects the complete Followers and Following lists, validates the result, and saves a new snapshot.
+- **Allow large decrease**: Allows a scan with a large drop in captured accounts to be saved. Use this only after manually confirming that the list is complete.
 
-Login and scan operations run in the background so the window remains responsive. If the saved session has expired or Instagram requires a security check, use **Open Login Browser**, complete the login manually, close Chromium, and then start the scan again.
+### Result buttons
 
-The command-line interface remains available for scripting and troubleshooting.
+- **Latest Status**: Shows the newest snapshot, list totals, and current relationship summary.
+- **Recent Changes**: Shows differences between the two most recent snapshots.
+- **Non-followers**: Lists accounts you follow that do not follow you back.
+- **Mutual Followers**: Lists accounts that follow you and are also followed by you.
+- **Account History**: Shows saved relationship states and events for one account. Replace the username field with the account you want to inspect before selecting this button. The account must have appeared in a saved Followers or Following list.
+- **Clear Database**: Deletes all snapshots, events, and stored account history after a confirmation dialog. The Chromium login session is not removed. The next successful scan becomes a new initial snapshot.
 
-## Usage
+## First Use
 
-### Manual login
+1. Start the application.
+2. Select **Open Login Browser**.
+3. Sign in to Instagram manually and complete any required security checks.
+4. Confirm that Instagram opens normally, then close all Chromium windows.
+5. Enter the signed-in account's username in the application.
+6. Select **Start Scan**.
 
-Before the first scan, open the persistent browser profile and sign in to Instagram:
-
-```powershell
-.\.venv\Scripts\python.exe main.py login
-```
-
-Complete the login and any required security checks in the Chromium window. After confirming that the Instagram home page is available, close all Chromium windows opened by the command.
-
-The command remains active until Chromium closes so the browser has time to save the session to `browser_data/`. It does not collect account lists or create a snapshot.
-
-### Run a scan
-
-```powershell
-.\.venv\Scripts\python.exe main.py scan --username your_username
-```
-
-Enter the username without `@`. For example, if the profile URL is `https://www.instagram.com/example_user/`, run:
-
-```powershell
-.\.venv\Scripts\python.exe main.py scan --username example_user
-```
-
-Automatic profile detection is also available:
-
-```powershell
-.\.venv\Scripts\python.exe main.py scan
-```
-
-Using `--username` is recommended when Instagram's navigation layout prevents automatic detection.
-
-Keep Chromium open until the scan finishes. A snapshot is saved only when both the Followers and Following lists have been collected and validated successfully.
-
-### View results
-
-Show the latest snapshot:
-
-```powershell
-.\.venv\Scripts\python.exe main.py status
-```
-
-Show changes detected by the latest scan:
-
-```powershell
-.\.venv\Scripts\python.exe main.py changes
-```
-
-List accounts you follow that do not follow you:
-
-```powershell
-.\.venv\Scripts\python.exe main.py nonfollowers
-```
-
-List mutual followers:
-
-```powershell
-.\.venv\Scripts\python.exe main.py mutual
-```
-
-Show the history of one account:
-
-```powershell
-.\.venv\Scripts\python.exe main.py history example_user
-```
+The first successful scan establishes the initial state and does not create change events. Changes are reported from the second successful scan onward.
 
 ## Relationship Status
 
-The `nonfollowers` command uses previous snapshots to provide additional context:
+The non-follower list uses saved snapshots to provide additional context:
 
-- `NEVER FOLLOWED BACK`: no saved snapshot contains a mutual-follow relationship with the account.
+- `NEVER FOLLOWED BACK`: no saved snapshot contains a mutual relationship with the account.
 - `UNFOLLOWED YOU`: the account was mutual in an earlier snapshot but no longer follows you.
 
-The first scan establishes the initial state. Change events are generated from the second successful scan onward.
+## Scan Safety
 
-## Incomplete Scan Protection
+Instagram loads relationship lists gradually. The application collects unique profile links while scrolling and waits for the list to stop changing. If fewer accounts are captured than the count shown by Instagram, it performs another collection attempt. A result that still appears incomplete is not saved.
 
-Instagram loads Followers and Following gradually. The scraper collects unique usernames while scrolling the list and stops only after several consecutive rounds produce no new accounts. A maximum number of rounds and timeouts prevent an infinite loop. If fewer accounts are captured than the count displayed by Instagram, the list is collected again; a result that remains incomplete is not saved.
+Followers and Following are also checked separately against the previous snapshot. By default, a list that falls below 70% of its previous size is rejected. The large-decrease option should only be enabled after the result has been checked manually.
 
-Before saving a new snapshot, Followers and Following are validated separately against the previous scan. If either list falls below 70% of its previous size, the result is considered incomplete and is not saved.
-
-If a large decrease is genuine and the lists have been checked manually, the validation can be overridden explicitly:
-
-```powershell
-.\.venv\Scripts\python.exe main.py scan --username your_username --allow-large-drop
-```
-
-This option should only be used after confirming that the scan is complete.
+Both lists must be collected and validated before a snapshot is committed. A failed scan does not create a partial snapshot.
 
 ## Local Data
 
@@ -165,13 +106,11 @@ browser_data/         Persistent Chromium profile and login session
 logs/tracker.log      Diagnostic log
 ```
 
-The `browser_data/` directory contains sensitive session information and should not be shared or committed to version control. Runtime data is excluded through `.gitignore`.
+These files are excluded from Git through `.gitignore`. The `browser_data/` directory contains sensitive session information and should never be shared.
 
 The application does not write passwords, cookies, or authentication tokens to SQLite or the log file.
 
 ## Testing
-
-Run the offline test suite and syntax check with:
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
@@ -184,25 +123,17 @@ The database tests use temporary files and do not modify `data/tracker.db`.
 
 - CAPTCHA, 2FA, checkpoints, and other Instagram security prompts must be completed manually.
 - The application does not attempt to bypass Instagram security systems.
-- Only one `login` or `scan` process should use `browser_data/` at a time.
+- Do not open more than one login or scan process at the same time.
 - Instagram may change its web interface without notice, so selectors may require future maintenance.
-- This project is intended for personal use with your own account. Use it responsibly and follow Instagram's terms.
+- This project is intended for personal use with your own account.
 
 ---
 
 ## 中文操作說明
 
-以下說明涵蓋安裝、登入、掃描與結果查詢。所有指令皆於 VS Code 終端機中執行。
-
 ### 安裝
 
-進入專案資料夾：
-
-```powershell
-cd "C:\path\to\ig-follow-tracker"
-```
-
-建立虛擬環境並安裝所需套件：
+在 VS Code 開啟專案資料夾後，於終端機執行：
 
 ```powershell
 python -m venv .venv
@@ -210,108 +141,42 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m playwright install chromium
 ```
 
-上述安裝流程只需執行一次。
+以上步驟只需在第一次使用時執行。
 
-### 開啟圖形介面
+### 啟動程式
 
 ```powershell
 .\.venv\Scripts\python.exe main.py gui
 ```
 
-在視窗上方輸入目前登入的 Instagram 帳號名稱，即可使用按鈕執行登入、掃描、查看最新狀態、最近變動、未回追名單與互追名單。
+### 帳號與掃描
 
-「帳號歷史」用來查詢特定帳號過去的關係變化。請將上方欄位改為要查詢的對方帳號，再按下「帳號歷史」。該帳號必須曾出現在已儲存的 Followers 或 Following 名單中；自己的帳號通常不會出現在這兩份名單，因此不會有帳號歷史。
+- **Instagram username**：輸入目前登入的 Instagram 帳號名稱，不需加上 `@`。
+- **開啟登入瀏覽器**：開啟程式專用的 Chromium。第一次使用、登入狀態過期或遇到安全驗證時使用。登入完成後，請關閉所有由程式開啟的 Chromium 視窗。
+- **開始掃描**：抓取完整的 Followers 與 Following 名單，通過驗證後建立新的 Snapshot。
+- **允許大幅下降**：當本次抓取數量明顯少於上次時，仍允許儲存結果。只有在確認名單確實完整時才建議勾選。
 
-若要捨棄現有紀錄並重新建立比較基準，可以按下「清空資料庫」。程式會先顯示確認視窗，確認後才會刪除所有 Snapshot、變動事件與帳號歷史。此操作不會清除 Instagram 登入狀態；下一次成功掃描會成為新的初始 Snapshot。
+### 查詢功能
 
-第一次使用或登入狀態過期時，先按「開啟登入瀏覽器」。完成登入並關閉 Chromium 後，再回到程式按「開始掃描」。掃描會在背景執行，不會凍結視窗。
+- **最新狀態**：顯示最新 Snapshot 的時間、Followers、Following 與目前關係統計。
+- **最近變動**：比較最近兩次 Snapshot，顯示誰取消追蹤你、新增 Followers、你取消追蹤誰，以及你新追蹤誰。
+- **未回追名單**：顯示你有追蹤、但對方沒有追蹤你的帳號。
+- **互追名單**：顯示目前雙方互相追蹤的帳號。
+- **帳號歷史**：查詢特定帳號過去的關係狀態與事件。請先將上方欄位改成要查詢的對方帳號，再按下此按鈕。該帳號必須曾出現在已儲存的 Followers 或 Following 名單中。自己的帳號通常不會出現在這兩份名單，因此不會有帳號歷史。
+- **清空資料庫**：清除所有 Snapshot、變動事件與帳號歷史。按下後會先出現確認視窗，Instagram 登入狀態不會受到影響。清空後的第一次掃描會重新建立初始 Snapshot。
 
-下列 CLI 指令仍可正常使用。
+### 第一次使用
 
-### 登入 Instagram
+1. 啟動程式後，按下「開啟登入瀏覽器」。
+2. 在 Chromium 中手動登入 Instagram，並完成必要的安全驗證。
+3. 確認 Instagram 可以正常使用後，關閉所有 Chromium 視窗。
+4. 回到程式，輸入目前登入的帳號名稱。
+5. 按下「開始掃描」。
 
-第一次使用前，先開啟專用的 Chromium 瀏覽器設定檔：
-
-```powershell
-.\.venv\Scripts\python.exe main.py login
-```
-
-在開啟的 Chromium 中手動登入 Instagram，並完成必要的安全驗證。確認 Instagram 首頁可以正常使用後，關閉此指令開啟的所有 Chromium 視窗。
-
-Chromium 關閉前，終端機會維持執行狀態，這是正常行為。程式會在瀏覽器關閉後保留登入狀態，這個步驟不會執行掃描。
-
-### 執行掃描
-
-```powershell
-.\.venv\Scripts\python.exe main.py scan --username 你的IG帳號
-```
-
-帳號名稱不需加上 `@`。例如，若個人頁網址為：
-
-```text
-https://www.instagram.com/example_user/
-```
-
-請執行：
-
-```powershell
-.\.venv\Scripts\python.exe main.py scan --username example_user
-```
-
-掃描期間請保持 Chromium 開啟。Followers 與 Following 都完成擷取並通過驗證後，程式才會將快照寫入資料庫。
-
-第一次掃描只會建立比較基準。從第二次成功掃描開始，程式才會產生追蹤關係的變動紀錄。
-
-### 查看未回追名單
-
-```powershell
-.\.venv\Scripts\python.exe main.py nonfollowers
-```
-
-名單中的狀態分為：
-
-- `NEVER FOLLOWED BACK`：現有歷史紀錄中從未互追。
-- `UNFOLLOWED YOU`：過去曾互追，但對方目前已取消追蹤。
-
-### 查看最近變動
-
-```powershell
-.\.venv\Scripts\python.exe main.py changes
-```
-
-### 其他查詢指令
-
-查看最新快照：
-
-```powershell
-.\.venv\Scripts\python.exe main.py status
-```
-
-查看互追名單：
-
-```powershell
-.\.venv\Scripts\python.exe main.py mutual
-```
-
-查看單一帳號的歷史：
-
-```powershell
-.\.venv\Scripts\python.exe main.py history example_user
-```
+第一次成功掃描只會建立比較基準，不會將整份名單列為新增追蹤。從第二次成功掃描開始，程式才會顯示兩次 Snapshot 之間的變動。
 
 ### 後續使用
 
-登入狀態尚未過期時，只需再次執行掃描：
+登入狀態仍有效時，開啟程式後可直接執行掃描。若 Instagram 要求重新登入、2FA、CAPTCHA 或其他安全驗證，請使用「開啟登入瀏覽器」手動完成。
 
-```powershell
-cd "C:\path\to\ig-follow-tracker"
-.\.venv\Scripts\python.exe main.py scan --username 你的IG帳號
-```
-
-若登入狀態已過期，重新執行登入指令：
-
-```powershell
-.\.venv\Scripts\python.exe main.py login
-```
-
-同一時間請勿執行多個 `login` 或 `scan`。Chromium 尚未關閉時啟動另一個指令，可能會造成 `browser_data/` 被鎖定。
+掃描期間請保持 Chromium 開啟。Followers 與 Following 都完成擷取並通過驗證後，程式才會寫入 Snapshot；任何一份名單失敗都不會留下不完整紀錄。
