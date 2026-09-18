@@ -38,6 +38,24 @@ python -m venv .venv
 .\.venv\Scripts\python.exe main.py gui
 ```
 
+### Portable Windows build
+
+The packaged application is generated at:
+
+```text
+dist/InstagramFollowTracker/InstagramFollowTracker.exe
+```
+
+Double-click the EXE to start the application. Keep the complete `InstagramFollowTracker` folder together; the EXE depends on the bundled files in `_internal/`.
+
+To rebuild the portable folder:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_windows.ps1
+```
+
+The first build downloads Chromium and produces a folder of roughly 560 MB. Build output is excluded from Git.
+
 On first use, select **Open Login Browser**, sign in to Instagram manually, and close Chromium after the home page loads. Enter the signed-in username and select **Start Scan**.
 
 The first successful scan creates the comparison baseline. Changes are reported from the second scan onward.
@@ -94,6 +112,18 @@ python -m venv .venv
 
 ```powershell
 .\.venv\Scripts\python.exe main.py gui
+```
+
+若已完成 Windows 版封裝，也可以直接開啟：
+
+```text
+dist\InstagramFollowTracker\InstagramFollowTracker.exe
+```
+
+請保留整個 `InstagramFollowTracker` 資料夾，不要只移動 EXE。若要重新建置可攜版，執行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_windows.ps1
 ```
 
 ### 使用方式

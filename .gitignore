@@ -7,6 +7,11 @@ venv/
 .mypy_cache/
 .ruff_cache/
 
+# PyInstaller output
+build/
+dist/
+*.spec
+
 # Persistent login profile (sensitive) and runtime output
 browser_data/*
 !browser_data/.gitkeep
@@ -20,4 +25,3 @@ logs/*
 .idea/
 .DS_Store
 Thumbs.db
-

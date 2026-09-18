@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import logging
+import sys
 from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-DATA_DIR = PROJECT_ROOT / "data"
+APPLICATION_ROOT = (
+    Path(sys.executable).resolve().parent
+    if getattr(sys, "frozen", False)
+    else PROJECT_ROOT
+)
+DATA_DIR = APPLICATION_ROOT / "data"
 DATABASE_PATH = DATA_DIR / "tracker.db"
-BROWSER_DATA_DIR = PROJECT_ROOT / "browser_data"
-LOG_DIR = PROJECT_ROOT / "logs"
+BROWSER_DATA_DIR = APPLICATION_ROOT / "browser_data"
+LOG_DIR = APPLICATION_ROOT / "logs"
 LOG_FILE = LOG_DIR / "tracker.log"
 
 INSTAGRAM_BASE_URL = "https://www.instagram.com/"
