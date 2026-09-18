@@ -8,6 +8,7 @@ try:
     from scraper import (
         RELATIONSHIP_TEXT_PATTERNS,
         extract_username_from_profile_url,
+        is_unavailable_profile_text,
         parse_relationship_count,
     )
 except ModuleNotFoundError as exc:
@@ -16,6 +17,7 @@ except ModuleNotFoundError as exc:
     extract_username_from_profile_url = None  # type: ignore[assignment]
     RELATIONSHIP_TEXT_PATTERNS = None  # type: ignore[assignment]
     parse_relationship_count = None  # type: ignore[assignment]
+    is_unavailable_profile_text = None  # type: ignore[assignment]
 
 
 @unittest.skipIf(extract_username_from_profile_url is None, "Playwright is not installed")
@@ -54,6 +56,16 @@ class ProfileUrlTests(unittest.TestCase):
         self.assertEqual(parse_relationship_count("1,234 followers"), 1234)
         self.assertEqual(parse_relationship_count("1.2K followers"), 1200)
         self.assertIsNone(parse_relationship_count("following"))
+
+    def test_detects_unavailable_profile_messages(self) -> None:
+        assert is_unavailable_profile_text is not None
+        self.assertTrue(
+            is_unavailable_profile_text("很抱歉，此頁面無法使用。 返回 Instagram。")
+        )
+        self.assertTrue(
+            is_unavailable_profile_text("Sorry, this page isn't available.")
+        )
+        self.assertFalse(is_unavailable_profile_text("154 followers 390 following"))
 
 
 if __name__ == "__main__":

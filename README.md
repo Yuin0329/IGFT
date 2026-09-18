@@ -14,6 +14,8 @@ The application uses Playwright to control Chromium and stores each successful s
 - Per-account relationship history
 - Persistent Chromium login session
 - Incomplete-scan protection
+- English and Traditional Chinese interface
+- Deactivated-account filtering when Instagram's list count is inconsistent
 - Local SQLite storage
 
 ## Requirements
@@ -56,6 +58,8 @@ powershell -ExecutionPolicy Bypass -File .\build_windows.ps1
 
 The first build downloads Chromium and produces a folder of roughly 560 MB. Build output is excluded from Git.
 
+The interface starts in English. Use the language selector in the upper-right corner to switch between **English** and **繁體中文**.
+
 On first use, select **Open Login Browser**, sign in to Instagram manually, and close Chromium after the home page loads. Enter the signed-in username and select **Start Scan**.
 
 The first successful scan creates the comparison baseline. Changes are reported from the second scan onward.
@@ -64,6 +68,7 @@ The first successful scan creates the comparison baseline. Changes are reported 
 
 | Control | Purpose |
 | --- | --- |
+| Language | Switches the interface between English and Traditional Chinese. |
 | Open Login Browser | Opens the persistent Chromium profile for login or security checks. |
 | Start Scan | Collects Followers and Following and saves a validated snapshot. |
 | Latest Status | Shows the newest totals and relationship summary. |
@@ -128,14 +133,17 @@ powershell -ExecutionPolicy Bypass -File .\build_windows.ps1
 
 ### 使用方式
 
-1. 第一次使用時按「開啟登入瀏覽器」，登入 Instagram 後關閉 Chromium。
+程式預設使用英文，可從右上角的語言選單切換為「繁體中文」。
+
+1. 第一次使用時按「Open Login Browser／開啟登入瀏覽器」，登入 Instagram 後關閉 Chromium。
 2. 輸入目前登入的帳號名稱，不需加上 `@`。
-3. 按「開始掃描」。第一次掃描會建立比較基準，第二次開始才會顯示變動。
+3. 按「Start Scan／開始掃描」。第一次掃描會建立比較基準，第二次開始才會顯示變動。
 
 ### 按鈕說明
 
 | 按鈕 | 用途 |
 | --- | --- |
+| Language／語言 | 切換英文與繁體中文介面。 |
 | 開啟登入瀏覽器 | 登入 Instagram，或處理登入過期與安全驗證。 |
 | 開始掃描 | 抓取 Followers 與 Following，驗證完成後儲存 Snapshot。 |
 | 最新狀態 | 查看最新人數與關係統計。 |

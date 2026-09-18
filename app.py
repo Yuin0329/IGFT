@@ -25,7 +25,8 @@ def main() -> int:
         root.withdraw()
         messagebox.showerror(
             "Instagram Follow Tracker",
-            f"程式無法啟動：\n\n{exc}\n\n請查看 logs/tracker.log。",
+            f"The application could not start:\n\n{exc}\n\n"
+            "See logs/tracker.log for details.",
             parent=root,
         )
         root.destroy()

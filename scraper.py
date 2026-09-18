@@ -148,6 +148,15 @@ root => {
 RELATIONSHIP_COUNT_PATTERN = re.compile(
     r"(?P<number>\d[\d,\s]*(?:\.\d+)?)\s*(?P<suffix>[km]?)", re.IGNORECASE
 )
+DEFAULT_PROFILE_IMAGE_MARKER = "profile-pic-null"
+UNAVAILABLE_PROFILE_TEXT_PATTERNS = (
+    "sorry, this page isn't available",
+    "sorry, this page is not available",
+    "很抱歉，此頁面無法使用",
+    "抱歉，此页面无法使用",
+    "このページはご利用いただけません",
+    "페이지를 사용할 수 없습니다",
+)
 
 
 def extract_username_from_profile_url(url: str) -> str | None:
@@ -192,6 +201,13 @@ def parse_relationship_count(text: str) -> int | None:
         return None
     multiplier = {"": 1, "k": 1_000, "m": 1_000_000}[match.group("suffix").lower()]
     return int(number * multiplier)
+
+
+def is_unavailable_profile_text(text: str) -> bool:
+    """Return whether an Instagram page reports an unavailable profile."""
+
+    normalized = " ".join(text.lower().split())
+    return any(pattern in normalized for pattern in UNAVAILABLE_PROFILE_TEXT_PATTERNS)
 
 
 def open_manual_login_browser() -> int:
@@ -469,6 +485,8 @@ class InstagramScraper:
         if relationship_path not in {"followers", "following"}:
             raise ValueError(f"Unsupported relationship: {relationship_path}")
         accounts: dict[str, Account] = {}
+        placeholder_avatar_usernames: set[str] = set()
+        confirmed_unavailable: set[str] = set()
         displayed_count: int | None = None
 
         for attempt in range(1, config.MAX_LIST_CAPTURE_ATTEMPTS + 1):
@@ -478,7 +496,7 @@ class InstagramScraper:
             if displayed_count is None:
                 displayed_count = current_displayed_count
             try:
-                captured = self._scroll_and_collect(
+                captured, captured_placeholders = self._scroll_and_collect(
                     page,
                     dialog,
                     relationship_path,
@@ -488,6 +506,26 @@ class InstagramScraper:
             finally:
                 self._close_modal(page, dialog)
             accounts.update(captured)
+            placeholder_avatar_usernames.update(captured_placeholders)
+            for unavailable_username in confirmed_unavailable:
+                accounts.pop(unavailable_username, None)
+
+            if displayed_count is not None and len(accounts) > displayed_count:
+                candidates = (
+                    placeholder_avatar_usernames
+                    & set(accounts)
+                    - confirmed_unavailable
+                )
+                unavailable = self._find_unavailable_profiles(page, candidates)
+                if unavailable:
+                    confirmed_unavailable.update(unavailable)
+                    for unavailable_username in unavailable:
+                        accounts.pop(unavailable_username, None)
+                    LOGGER.info(
+                        "Excluded unavailable %s accounts: %s",
+                        relationship_path,
+                        ", ".join(f"@{name}" for name in sorted(unavailable)),
+                    )
 
             if displayed_count is None or len(accounts) >= displayed_count:
                 return accounts
@@ -504,6 +542,49 @@ class InstagramScraper:
             f"{len(accounts)} unique accounts were captured after "
             f"{config.MAX_LIST_CAPTURE_ATTEMPTS} attempts. The snapshot was not saved."
         )
+
+    def _find_unavailable_profiles(
+        self, page: Page, usernames: set[str]
+    ) -> set[str]:
+        """Confirm unavailable profiles among a small set of excess rows."""
+
+        if not usernames:
+            return set()
+        unavailable: set[str] = set()
+        check_page = page.context.new_page()
+        check_page.set_default_timeout(config.PROFILE_AVAILABILITY_TIMEOUT_MS)
+        check_page.set_default_navigation_timeout(
+            config.PROFILE_AVAILABILITY_TIMEOUT_MS
+        )
+        try:
+            for username in sorted(usernames):
+                try:
+                    check_page.goto(
+                        canonical_profile_url(username),
+                        wait_until="domcontentloaded",
+                    )
+                    check_page.wait_for_timeout(
+                        config.PROFILE_AVAILABILITY_SETTLE_MS
+                    )
+                except PlaywrightTimeoutError:
+                    LOGGER.warning(
+                        "Could not verify whether @%s is unavailable; keeping it",
+                        username,
+                    )
+                    continue
+                if self._security_check_is_visible(check_page):
+                    self._pause_for_security_check()
+                if self._login_is_visible(check_page):
+                    raise InstagramAuthenticationError(
+                        "Instagram returned to login while checking an excess list row. "
+                        "No snapshot was saved."
+                    )
+                body_text = check_page.locator("body").inner_text()
+                if is_unavailable_profile_text(body_text):
+                    unavailable.add(username)
+        finally:
+            check_page.close()
+        return unavailable
 
     def _open_relationship_modal(
         self, page: Page, username: str, relationship_path: str
@@ -569,15 +650,17 @@ class InstagramScraper:
         relationship_path: str,
         previously_captured: set[str] | None = None,
         stop_at_count: int | None = None,
-    ) -> dict[str, Account]:
-        accounts = self._wait_for_initial_list_state(page, dialog, relationship_path)
+    ) -> tuple[dict[str, Account], set[str]]:
+        accounts, placeholder_avatar_usernames = self._wait_for_initial_list_state(
+            page, dialog, relationship_path
+        )
         seen_usernames: set[str] = set(accounts)
         previously_captured = previously_captured or set()
         if (
             stop_at_count is not None
             and len(previously_captured | seen_usernames) >= stop_at_count
         ):
-            return accounts
+            return accounts, placeholder_avatar_usernames
         no_change_rounds = 0
 
         for round_number in range(1, config.MAX_SCROLL_ROUNDS + 1):
@@ -592,8 +675,11 @@ class InstagramScraper:
 
             page.wait_for_timeout(int(config.SCROLL_DELAY_SECONDS * 1000))
             self._assert_dialog_open(dialog, relationship_path)
-            visible_accounts = self._extract_visible_accounts(dialog)
+            visible_accounts, visible_placeholders = (
+                self._extract_visible_accounts_with_placeholders(dialog)
+            )
             accounts.update(visible_accounts)
+            placeholder_avatar_usernames.update(visible_placeholders)
             seen_usernames.update(visible_accounts)
             current_count = len(seen_usernames)
 
@@ -606,7 +692,7 @@ class InstagramScraper:
                     relationship_path.capitalize(),
                     stop_at_count,
                 )
-                return accounts
+                return accounts, placeholder_avatar_usernames
 
             if current_count == before_count:
                 no_change_rounds += 1
@@ -627,7 +713,7 @@ class InstagramScraper:
                 metrics,
             )
             if no_change_rounds >= config.MAX_NO_CHANGE_ROUNDS:
-                return accounts
+                return accounts, placeholder_avatar_usernames
 
         raise InstagramIncompleteListError(
             f"The {relationship_path} list was still changing after "
@@ -636,16 +722,18 @@ class InstagramScraper:
 
     def _wait_for_initial_list_state(
         self, page: Page, dialog: Locator, relationship_path: str
-    ) -> dict[str, Account]:
+    ) -> tuple[dict[str, Account], set[str]]:
         deadline = monotonic() + config.INITIAL_LIST_TIMEOUT_MS / 1000
         while monotonic() < deadline:
             self._assert_dialog_open(dialog, relationship_path)
-            accounts = self._extract_visible_accounts(dialog)
+            accounts, placeholders = self._extract_visible_accounts_with_placeholders(
+                dialog
+            )
             if accounts:
-                return accounts
+                return accounts, placeholders
             text = dialog.inner_text().strip().lower()
             if any(pattern in text for pattern in EMPTY_LIST_PATTERNS):
-                return {}
+                return {}, set()
             page.wait_for_timeout(500)
         raise InstagramDOMError(
             f"The {relationship_path} modal opened but no account rows or recognized "
@@ -655,12 +743,27 @@ class InstagramScraper:
 
     @staticmethod
     def _extract_visible_accounts(dialog: Locator) -> dict[str, Account]:
-        hrefs = dialog.locator(SELECTORS.modal_profile_links).evaluate_all(
-            "links => links.map(link => link.getAttribute('href') || '')"
+        accounts, _ = InstagramScraper._extract_visible_accounts_with_placeholders(
+            dialog
+        )
+        return accounts
+
+    @staticmethod
+    def _extract_visible_accounts_with_placeholders(
+        dialog: Locator,
+    ) -> tuple[dict[str, Account], set[str]]:
+        rows = dialog.locator(SELECTORS.modal_profile_links).evaluate_all(
+            """
+            links => links.map(link => ({
+                href: link.getAttribute('href') || '',
+                imageSrc: link.querySelector('img')?.getAttribute('src') || ''
+            }))
+            """
         )
         accounts: dict[str, Account] = {}
-        for href in hrefs:
-            username = extract_username_from_profile_url(str(href))
+        placeholder_avatar_usernames: set[str] = set()
+        for row in rows:
+            username = extract_username_from_profile_url(str(row["href"]))
             if username is None:
                 continue
             accounts[username] = Account(
@@ -668,7 +771,9 @@ class InstagramScraper:
                 profile_url=canonical_profile_url(username),
                 instagram_user_id=None,
             )
-        return accounts
+            if DEFAULT_PROFILE_IMAGE_MARKER in str(row["imageSrc"]).lower():
+                placeholder_avatar_usernames.add(username)
+        return accounts, placeholder_avatar_usernames
 
     @staticmethod
     def _assert_dialog_open(dialog: Locator, relationship_path: str) -> None:
