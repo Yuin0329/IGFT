@@ -8,7 +8,7 @@ The application uses Playwright to control Chromium and stores each successful s
 
 ## Download
 
-[**Download for Windows**](https://github.com/Yuin0329/IGFT/releases/latest/download/InstagramFollowerTracker-Windows.zip)
+[**Download for Windows**](https://codeload.github.com/Yuin0329/IGFT/zip/refs/heads/main)
 
 ## Features
 
