@@ -10,9 +10,9 @@ The application uses Playwright to control Chromium and stores each successful s
 
 [**Download for Windows**](https://github.com/Yuin0329/IGFT/releases/latest/download/InstagramFollowerTracker-Windows.zip)
 
-> **Extraction:** The download is already a ZIP archive. Use Windows **Extract All** or 7-Zip, and do not use WinRAR to extract it.
+> **Extraction:**  Use Windows **Extract All** or 7-Zip, and do not use WinRAR to extract it.
 >
-> **解壓縮提醒：**下載檔案本身已是 ZIP，請使用 Windows 內建的「解壓縮全部」或 7-Zip，請勿使用 WinRAR 解壓縮。
+> **解壓縮提醒：**請使用 Windows 內建的「解壓縮全部」或 7-Zip，請勿使用 WinRAR 解壓縮。
 
 ## Features
 
@@ -75,8 +75,6 @@ CAPTCHA, 2FA, checkpoints, and other Instagram security prompts must be complete
 下載並解壓縮 Windows 版後，開啟 `InstagramFollowTracker.exe` 即可使用。
 
 ### 使用方式
-
-程式預設使用英文，可從右上角的語言選單切換為「繁體中文」。
 
 1. 第一次使用時按「Open Login Browser／開啟登入瀏覽器」，登入 Instagram 後關閉 Chromium。
 2. 輸入目前登入的帳號名稱，不需加上 `@`。
