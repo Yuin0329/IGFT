@@ -12,7 +12,7 @@ The application uses Playwright to control Chromium and stores each successful s
 
 > **Extraction:**  Use Windows **Extract All** or 7-Zip, and do not use WinRAR to extract it.
 >
-> **解壓縮提醒：**請使用 Windows 內建的「解壓縮全部」或 7-Zip，請勿使用 WinRAR 解壓縮。
+> **解壓縮提醒：** 請使用 Windows 內建的「解壓縮全部」或 7-Zip，請勿使用 WinRAR 解壓縮。
 
 ## Features
 
