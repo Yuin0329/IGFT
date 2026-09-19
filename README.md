@@ -22,7 +22,7 @@ The application uses Playwright to control Chromium and stores each successful s
 - Per-account relationship history
 - Persistent Chromium login session
 - Incomplete-scan protection
-- English and Traditional Chinese interface
+- English, Traditional Chinese, and Japanese interface
 - Deactivated-account filtering when Instagram's list count is inconsistent
 - Local SQLite storage
 
@@ -32,7 +32,7 @@ The application uses Playwright to control Chromium and stores each successful s
 
 After downloading and extracting the Windows package, open `InstagramFollowTracker.exe`.
 
-The interface starts in English. Use the language selector in the upper-right corner to switch between **English** and **繁體中文**.
+The interface starts in English. Use the language selector in the upper-right corner to switch between **English**, **繁體中文**, and **日本語**.
 
 On first use, select **Open Login Browser**, sign in to Instagram manually, and close Chromium after the home page loads. Enter the signed-in username and select **Start Scan**.
 
@@ -42,7 +42,7 @@ The first successful scan creates the comparison baseline. Changes are reported 
 
 | Control | Purpose |
 | --- | --- |
-| Language | Switches the interface between English and Traditional Chinese. |
+| Language | Switches the interface between English, Traditional Chinese, and Japanese. |
 | Open Login Browser | Opens the persistent Chromium profile for login or security checks. |
 | Start Scan | Collects Followers and Following and saves a validated snapshot. |
 | Latest Status | Shows the newest totals and relationship summary. |
@@ -84,7 +84,7 @@ CAPTCHA, 2FA, checkpoints, and other Instagram security prompts must be complete
 
 | 按鈕 | 用途 |
 | --- | --- |
-| Language／語言 | 切換英文與繁體中文介面。 |
+| Language／語言 | 切換英文、繁體中文與日文介面。 |
 | 開啟登入瀏覽器 | 登入 Instagram，或處理登入過期與安全驗證。 |
 | 開始掃描 | 抓取 Followers 與 Following，驗證完成後儲存 Snapshot。 |
 | 最新狀態 | 查看最新人數與關係統計。 |

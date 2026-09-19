@@ -1,4 +1,4 @@
-"""Tests for bilingual GUI output formatting."""
+"""Tests for multilingual GUI output formatting."""
 
 from __future__ import annotations
 
@@ -45,6 +45,29 @@ class GuiLocalizationTests(unittest.TestCase):
     def test_relationship_state_labels_are_localized(self) -> None:
         self.assertEqual(_state_label(True, True), "Mutual")
         self.assertEqual(_state_label(True, True, "zh_TW"), "互追")
+
+    def test_japanese_output(self) -> None:
+        self.assertEqual(LANGUAGE_NAMES["ja"], "日本語")
+        analysis = RelationshipAnalysis(
+            mutual=frozenset({"alice"}),
+            not_following_back=frozenset({"bob"}),
+            i_dont_follow_back=frozenset({"carol"}),
+        )
+        changes = ChangeSet(
+            unfollowed_me=frozenset({"alice"}),
+            new_followers=frozenset({"bob"}),
+            i_unfollowed=frozenset(),
+            i_followed=frozenset({"carol"}),
+        )
+
+        summary = _format_relationship_summary(analysis, "ja")
+        change_text = _format_change_set(changes, "ja")
+
+        self.assertIn("現在の関係", summary)
+        self.assertIn("相互フォロー：1", summary)
+        self.assertIn("フォロー解除された：1", change_text)
+        self.assertIn("新しいフォロワー：1", change_text)
+        self.assertEqual(_state_label(True, True, "ja"), "相互フォロー")
 
 
 if __name__ == "__main__":

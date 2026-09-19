@@ -32,10 +32,11 @@ from models import (
 
 LOGGER = logging.getLogger(__name__)
 
-LanguageCode = Literal["en", "zh_TW"]
+LanguageCode = Literal["en", "zh_TW", "ja"]
 LANGUAGE_NAMES: dict[LanguageCode, str] = {
     "en": "English",
     "zh_TW": "繁體中文",
+    "ja": "日本語",
 }
 LANGUAGE_CODES = {name: code for code, name in LANGUAGE_NAMES.items()}
 
@@ -44,10 +45,16 @@ class GuiTaskError(RuntimeError):
     """An expected task failure that can be shown directly in the GUI."""
 
 
-def _pick(language: LanguageCode, english: str, chinese: str) -> str:
+def _pick(
+    language: LanguageCode, english: str, chinese: str, japanese: str
+) -> str:
     """Return text in the selected interface language."""
 
-    return chinese if language == "zh_TW" else english
+    return {
+        "en": english,
+        "zh_TW": chinese,
+        "ja": japanese,
+    }[language]
 
 
 def _format_time(value: datetime | None) -> str:
@@ -74,6 +81,15 @@ def _format_relationship_summary(
             f"對方未回追：{len(analysis.not_following_back)}\n"
             f"對方追蹤你，但你未回追：{len(analysis.i_dont_follow_back)}"
         )
+    if language == "ja":
+        return (
+            "現在の関係\n"
+            "────────────────────────\n"
+            f"相互フォロー：{len(analysis.mutual)}\n"
+            f"フォローバックされていない：{len(analysis.not_following_back)}\n"
+            f"相手からフォローされているが、あなたは未フォロー："
+            f"{len(analysis.i_dont_follow_back)}"
+        )
     return (
         "Current relationships\n"
         "────────────────────────\n"
@@ -90,6 +106,14 @@ def _format_change_set(changes: ChangeSet, language: LanguageCode = "en") -> str
             ("新的 Followers", changes.new_followers, "+"),
             ("你取消追蹤", changes.i_unfollowed, "-"),
             ("你新追蹤", changes.i_followed, "+"),
+        )
+        separator = "："
+    elif language == "ja":
+        groups = (
+            ("フォロー解除された", changes.unfollowed_me, "-"),
+            ("新しいフォロワー", changes.new_followers, "+"),
+            ("フォロー解除した", changes.i_unfollowed, "-"),
+            ("新しくフォローした", changes.i_followed, "+"),
         )
         separator = "："
     else:
@@ -135,6 +159,25 @@ def _format_scan_result(
                 "最近變動\n────────────────────────\n"
                 f"{_format_change_set(result.changes, language)}"
             )
+    elif language == "ja":
+        if result.previous is None:
+            heading = (
+                f"最初のスナップショット #{current.id} を作成しました\n"
+                f"日時：{_format_time(current.created_at)}\n"
+                f"Followers：{current.followers_count}\n"
+                f"Following：{current.following_count}"
+            )
+        else:
+            previous = result.previous
+            heading = (
+                f"スキャンが完了し、スナップショット #{current.id} を保存しました\n"
+                f"前回：{_format_time(previous.created_at)}\n"
+                f"今回：{_format_time(current.created_at)}\n\n"
+                f"Followers：{previous.followers_count} → {current.followers_count}\n"
+                f"Following：{previous.following_count} → {current.following_count}\n\n"
+                "最近の変更\n────────────────────────\n"
+                f"{_format_change_set(result.changes, language)}"
+            )
     elif result.previous is None:
         heading = (
             f"Initial snapshot #{current.id} created\n"
@@ -173,6 +216,23 @@ def _format_validation_issues(
             )
         lines.append("請重新掃描，或在確認結果完整後勾選「允許大幅下降」。")
         return "\n".join(lines)
+    if language == "ja":
+        lines = ["スキャン結果が不完全な可能性があるため、保存しませんでした。", ""]
+        for issue in issues:
+            lines.extend(
+                (
+                    issue.relationship_name.capitalize(),
+                    f"前回の件数：{issue.previous_count}",
+                    f"今回の取得件数：{issue.current_count}",
+                    f"最小比率：{issue.minimum_ratio:.0%}",
+                    "",
+                )
+            )
+        lines.append(
+            "もう一度スキャンするか、一覧が完全であることを確認してから"
+            "「大幅な減少を許可」を有効にしてください。"
+        )
+        return "\n".join(lines)
 
     lines = ["The scan result may be incomplete. No snapshot was saved.", ""]
     for issue in issues:
@@ -203,6 +263,14 @@ def _state_label(
         if is_following:
             return "你追蹤對方；對方未回追"
         return "目前沒有追蹤關係"
+    if language == "ja":
+        if is_follower and is_following:
+            return "相互フォロー"
+        if is_follower:
+            return "相手からフォローされている；あなたは未フォロー"
+        if is_following:
+            return "あなたがフォローしている；相手は未フォロー"
+        return "現在フォロー関係はありません"
     if is_follower and is_following:
         return "Mutual"
     if is_follower:
@@ -220,6 +288,11 @@ def _nonfollower_status_label(
             NonFollowerStatus.NEVER_FOLLOWED_BACK: "從未回追",
             NonFollowerStatus.UNFOLLOWED_YOU: "曾經互追 → 已取消追蹤你",
         }[status]
+    if language == "ja":
+        return {
+            NonFollowerStatus.NEVER_FOLLOWED_BACK: "一度もフォローバックされていない",
+            NonFollowerStatus.UNFOLLOWED_YOU: "以前は相互フォロー → フォロー解除された",
+        }[status]
     return {
         NonFollowerStatus.NEVER_FOLLOWED_BACK: "Never followed back",
         NonFollowerStatus.UNFOLLOWED_YOU: "Previously mutual → unfollowed you",
@@ -233,6 +306,13 @@ def _event_label(event_type: EventType, language: LanguageCode) -> str:
             EventType.UNFOLLOWED_ME: "取消追蹤你",
             EventType.I_FOLLOWED: "你開始追蹤",
             EventType.I_UNFOLLOWED: "你取消追蹤",
+        }[event_type]
+    if language == "ja":
+        return {
+            EventType.FOLLOWED_ME: "あなたをフォローした",
+            EventType.UNFOLLOWED_ME: "あなたのフォローを解除した",
+            EventType.I_FOLLOWED: "あなたがフォローした",
+            EventType.I_UNFOLLOWED: "あなたがフォロー解除した",
         }[event_type]
     return {
         EventType.FOLLOWED_ME: "Followed you",
@@ -255,7 +335,7 @@ class TrackerGUI:
         self.status_text = tk.StringVar(value="Ready")
         self._busy = False
         self._buttons: list[ttk.Button] = []
-        self._localized_buttons: list[tuple[ttk.Button, str, str]] = []
+        self._localized_buttons: list[tuple[ttk.Button, str, str, str]] = []
         self._results: queue.Queue[tuple[bool, str]] = queue.Queue()
 
         self._configure_window()
@@ -264,8 +344,8 @@ class TrackerGUI:
         self.root.after(100, self._process_results)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
-    def _t(self, english: str, chinese: str) -> str:
-        return _pick(self.language, english, chinese)
+    def _t(self, english: str, chinese: str, japanese: str) -> str:
+        return _pick(self.language, english, chinese, japanese)
 
     def _configure_window(self) -> None:
         self.root.title("Instagram Follower Tracker")
@@ -316,9 +396,14 @@ class TrackerGUI:
         scan_button = ttk.Button(self.controls_frame, command=self._start_scan)
         scan_button.grid(row=0, column=3)
         self._register_button(
-            login_button, "Open Login Browser", "開啟登入瀏覽器"
+            login_button,
+            "Open Login Browser",
+            "開啟登入瀏覽器",
+            "ログインブラウザを開く",
         )
-        self._register_button(scan_button, "Start Scan", "開始掃描")
+        self._register_button(
+            scan_button, "Start Scan", "開始掃描", "スキャン開始"
+        )
 
         self.allow_drop_check = ttk.Checkbutton(
             self.controls_frame,
@@ -331,17 +416,17 @@ class TrackerGUI:
         actions = ttk.Frame(container)
         actions.grid(row=2, column=0, sticky=tk.EW, pady=(0, 8))
         action_specs = (
-            ("Latest Status", "最新狀態", self._show_status),
-            ("Recent Changes", "最近變動", self._show_changes),
-            ("Non-followers", "未回追名單", self._show_nonfollowers),
-            ("Mutual", "互追名單", self._show_mutual),
-            ("Account History", "帳號歷史", self._show_history),
-            ("Clear Database", "清空資料庫", self._clear_database),
+            ("Latest Status", "最新狀態", "最新の状態", self._show_status),
+            ("Recent Changes", "最近變動", "最近の変更", self._show_changes),
+            ("Non-followers", "未回追名單", "未フォローバック", self._show_nonfollowers),
+            ("Mutual", "互追名單", "相互フォロー", self._show_mutual),
+            ("Account History", "帳號歷史", "アカウント履歴", self._show_history),
+            ("Clear Database", "清空資料庫", "データベースを消去", self._clear_database),
         )
-        for column, (english, chinese, command) in enumerate(action_specs):
+        for column, (english, chinese, japanese, command) in enumerate(action_specs):
             button = ttk.Button(actions, command=command)
             button.grid(row=0, column=column, padx=(0, 8))
-            self._register_button(button, english, chinese)
+            self._register_button(button, english, chinese, japanese)
 
         self.output_frame = ttk.LabelFrame(container, padding=8)
         self.output_frame.grid(row=3, column=0, sticky=tk.NSEW)
@@ -362,10 +447,10 @@ class TrackerGUI:
         status_bar.grid(row=4, column=0, sticky=tk.EW, pady=(8, 0))
 
     def _register_button(
-        self, button: ttk.Button, english: str, chinese: str
+        self, button: ttk.Button, english: str, chinese: str, japanese: str
     ) -> None:
         self._buttons.append(button)
-        self._localized_buttons.append((button, english, chinese))
+        self._localized_buttons.append((button, english, chinese, japanese))
 
     def _on_language_changed(self, _event: tk.Event[tk.Misc] | None = None) -> None:
         selected = self.language_choice.get()
@@ -373,19 +458,22 @@ class TrackerGUI:
         self._apply_language(reset_output=True)
 
     def _apply_language(self, reset_output: bool) -> None:
-        self.language_label.configure(text=self._t("Language", "語言"))
-        self.controls_frame.configure(text=self._t("Account and Scan", "帳號與掃描"))
+        self.language_label.configure(text=self._t("Language", "語言", "言語"))
+        self.controls_frame.configure(
+            text=self._t("Account and Scan", "帳號與掃描", "アカウントとスキャン")
+        )
         self.username_label.configure(text="Instagram username")
         self.allow_drop_check.configure(
             text=self._t(
                 "Allow large decrease (use only after confirming complete lists)",
                 "允許大幅下降（僅在確認名單完整時使用）",
+                "大幅な減少を許可（一覧が完全であることを確認した場合のみ）",
             )
         )
-        self.output_frame.configure(text=self._t("Results", "結果"))
-        for button, english, chinese in self._localized_buttons:
-            button.configure(text=self._t(english, chinese))
-        self.status_text.set(self._t("Ready", "就緒"))
+        self.output_frame.configure(text=self._t("Results", "結果", "結果"))
+        for button, english, chinese, japanese in self._localized_buttons:
+            button.configure(text=self._t(english, chinese, japanese))
+        self.status_text.set(self._t("Ready", "就緒", "準備完了"))
         if reset_output:
             self._set_output(
                 self._t(
@@ -395,6 +483,9 @@ class TrackerGUI:
                     "請先輸入 Instagram username。\n\n"
                     "第一次使用請按「開啟登入瀏覽器」，登入完成並關閉所有 Chromium "
                     "視窗後，再按「開始掃描」。",
+                    "最初に Instagram のユーザーネームを入力してください。\n\n"
+                    "初回は「ログインブラウザを開く」を選択してください。ログイン後、"
+                    "すべての Chromium ウィンドウを閉じてから「スキャン開始」を選択します。",
                 )
             )
 
@@ -411,22 +502,25 @@ class TrackerGUI:
         for button in self._buttons:
             button.configure(state=state)
         self.language_combo.configure(state="disabled" if busy else "readonly")
-        self.status_text.set(status or self._t("Ready", "就緒"))
+        self.status_text.set(status or self._t("Ready", "就緒", "準備完了"))
         self.root.configure(cursor="watch" if busy else "")
 
     def _run_task(self, status: str, task: Callable[[], str]) -> None:
         if self._busy:
             messagebox.showinfo(
-                self._t("In progress", "執行中"),
+                self._t("In progress", "執行中", "実行中"),
                 self._t(
                     "Wait for the current task to finish.",
                     "請等待目前的工作完成。",
+                    "現在の処理が完了するまでお待ちください。",
                 ),
                 parent=self.root,
             )
             return
         self._set_busy(True, status)
-        self._set_output(f"{status}\n\n{self._t('Please wait…', '請稍候……')}")
+        self._set_output(
+            f"{status}\n\n{self._t('Please wait…', '請稍候……', 'お待ちください……')}"
+        )
 
         def worker() -> None:
             try:
@@ -442,6 +536,7 @@ class TrackerGUI:
                         self._t(
                             f"An unexpected error occurred: {exc}",
                             f"發生未預期的錯誤：{exc}",
+                            f"予期しないエラーが発生しました：{exc}",
                         ),
                     )
                 )
@@ -456,14 +551,14 @@ class TrackerGUI:
         else:
             self._set_busy(
                 False,
-                self._t("Complete", "完成")
+                self._t("Complete", "完成", "完了")
                 if succeeded
-                else self._t("Not completed", "未完成"),
+                else self._t("Not completed", "未完成", "未完了"),
             )
             self._set_output(text)
             if not succeeded:
                 messagebox.showerror(
-                    self._t("Operation not completed", "操作未完成"),
+                    self._t("Operation not completed", "操作未完成", "操作は未完了です"),
                     text,
                     parent=self.root,
                 )
@@ -484,6 +579,8 @@ class TrackerGUI:
                         "Chromium did not close normally. Make sure no other process "
                         "is using browser_data.",
                         "Chromium 未正常關閉。請確認沒有其他程式正在使用 browser_data。",
+                        "Chromium が正常に終了しませんでした。ほかのプロセスが "
+                        "browser_data を使用していないか確認してください。",
                     )
                 )
             return self._t(
@@ -491,12 +588,15 @@ class TrackerGUI:
                 "Confirm the username, then select Start Scan.",
                 "登入瀏覽器已關閉，登入狀態已保存。\n\n"
                 "確認 username 後即可按「開始掃描」。",
+                "ログインブラウザを閉じ、セッションを保存しました。\n\n"
+                "ユーザーネームを確認して「スキャン開始」を選択してください。",
             )
 
         self._run_task(
             self._t(
                 "Waiting for manual login; close all Chromium windows when finished",
                 "等待手動登入；完成後請關閉所有 Chromium 視窗",
+                "手動ログインを待機中；完了したらすべての Chromium ウィンドウを閉じてください",
             ),
             task,
         )
@@ -542,6 +642,7 @@ class TrackerGUI:
             self._t(
                 "Collecting Followers and Following",
                 "正在擷取 Followers 與 Following",
+                "Followers と Following を取得中",
             ),
             task,
         )
@@ -553,6 +654,7 @@ class TrackerGUI:
                 self._t(
                     "No snapshots exist yet. Complete a scan first.",
                     "目前沒有快照。請先完成一次掃描。",
+                    "スナップショットがありません。先にスキャンを完了してください。",
                 )
             )
         return latest
@@ -574,6 +676,13 @@ class TrackerGUI:
                     f"Followers：{latest.followers_count}\n"
                     f"Following：{latest.following_count}"
                 )
+            elif self.language == "ja":
+                heading = (
+                    f"最新のスナップショット #{latest.id}\n"
+                    f"日時：{_format_time(latest.created_at)}\n"
+                    f"Followers：{latest.followers_count}\n"
+                    f"Following：{latest.following_count}"
+                )
             else:
                 heading = (
                     f"Latest snapshot #{latest.id}\n"
@@ -584,7 +693,8 @@ class TrackerGUI:
             return f"{heading}\n\n{_format_relationship_summary(analysis, self.language)}"
 
         self._run_task(
-            self._t("Loading latest status", "正在讀取最新狀態"), task
+            self._t("Loading latest status", "正在讀取最新狀態", "最新の状態を読み込み中"),
+            task,
         )
 
     def _show_changes(self) -> None:
@@ -596,8 +706,10 @@ class TrackerGUI:
                     "The latest scan is the initial snapshot; there are no changes "
                     "to compare yet.",
                     "目前只有第一個快照，尚無可比較的變動。",
+                    "最新のスキャンは最初のスナップショットのため、"
+                    "まだ比較できる変更はありません。",
                 )
-            title = self._t("Recent changes", "最近變動")
+            title = self._t("Recent changes", "最近變動", "最近の変更")
             changes = self.database.get_changes_for_snapshot(latest.id)
             return (
                 f"{title}\n"
@@ -607,7 +719,8 @@ class TrackerGUI:
             )
 
         self._run_task(
-            self._t("Loading recent changes", "正在讀取最近變動"), task
+            self._t("Loading recent changes", "正在讀取最近變動", "最近の変更を読み込み中"),
+            task,
         )
 
     def _show_nonfollowers(self) -> None:
@@ -617,7 +730,12 @@ class TrackerGUI:
             return self._format_nonfollowers(details, latest)
 
         self._run_task(
-            self._t("Loading non-followers", "正在讀取未回追名單"), task
+            self._t(
+                "Loading non-followers",
+                "正在讀取未回追名單",
+                "未フォローバック一覧を読み込み中",
+            ),
+            task,
         )
 
     def _format_nonfollowers(
@@ -626,6 +744,13 @@ class TrackerGUI:
         if self.language == "zh_TW":
             lines = [f"未回追名單（快照 #{latest.id}）：{len(details)}", ""]
             empty_message = "目前追蹤的帳號都有回追。"
+        elif self.language == "ja":
+            lines = [
+                f"フォローバックされていないアカウント"
+                f"（スナップショット #{latest.id}）：{len(details)}",
+                "",
+            ]
+            empty_message = "フォロー中のすべてのアカウントからフォローバックされています。"
         else:
             lines = [
                 f"Not following you back (snapshot #{latest.id}): {len(details)}",
@@ -638,17 +763,21 @@ class TrackerGUI:
         for detail in details:
             lines.append(f"@{detail.username}")
             lines.append(
-                self._t("Status: ", "狀態：")
+                self._t("Status: ", "狀態：", "状態：")
                 + _nonfollower_status_label(detail.status, self.language)
             )
             if detail.last_mutual_at is not None:
                 lines.append(
-                    self._t("Last mutual: ", "最後互追：")
+                    self._t("Last mutual: ", "最後互追：", "最後の相互フォロー：")
                     + _format_time(detail.last_mutual_at)
                 )
             if detail.detected_unfollow_at is not None:
                 lines.append(
-                    self._t("Detected unfollow: ", "偵測取消追蹤：")
+                    self._t(
+                        "Detected unfollow: ",
+                        "偵測取消追蹤：",
+                        "フォロー解除の検出：",
+                    )
                     + _format_time(detail.detected_unfollow_at)
                 )
             lines.append("")
@@ -668,24 +797,33 @@ class TrackerGUI:
             title = self._t(
                 f"Mutual accounts (snapshot #{latest.id}): {len(mutual)}",
                 f"互追名單（快照 #{latest.id}）：{len(mutual)}",
+                f"相互フォロー（スナップショット #{latest.id}）：{len(mutual)}",
             )
             empty = self._t(
-                "There are no mutual accounts.", "目前沒有互追帳號。"
+                "There are no mutual accounts.",
+                "目前沒有互追帳號。",
+                "相互フォローのアカウントはありません。",
             )
             return title + (f"\n\n{names}" if names else f"\n\n{empty}")
 
         self._run_task(
-            self._t("Loading mutual accounts", "正在讀取互追名單"), task
+            self._t(
+                "Loading mutual accounts",
+                "正在讀取互追名單",
+                "相互フォローを読み込み中",
+            ),
+            task,
         )
 
     def _show_history(self) -> None:
         username = normalize_username(self.username.get())
         if not username:
             messagebox.showinfo(
-                self._t("Username required", "需要帳號"),
+                self._t("Username required", "需要帳號", "ユーザーネームが必要です"),
                 self._t(
                     "Enter the account to look up in the username field first.",
                     "請先在 username 欄位輸入要查詢的帳號。",
+                    "最初にユーザーネーム欄へ検索するアカウントを入力してください。",
                 ),
                 parent=self.root,
             )
@@ -698,6 +836,7 @@ class TrackerGUI:
                     self._t(
                         f"No history was found for @{username}.",
                         f"找不到 @{username} 的歷史紀錄。",
+                        f"@{username} の履歴が見つかりませんでした。",
                     )
                 )
             return self._format_history(history)
@@ -706,6 +845,7 @@ class TrackerGUI:
             self._t(
                 f"Loading history for @{username}",
                 f"正在讀取 @{username} 的歷史",
+                f"@{username} の履歴を読み込み中",
             ),
             task,
         )
@@ -715,16 +855,21 @@ class TrackerGUI:
 
         if self._busy:
             messagebox.showinfo(
-                self._t("Busy", "目前忙碌中"),
+                self._t("Busy", "目前忙碌中", "処理中"),
                 self._t(
                     "Wait for the current task to finish and try again.",
                     "請等待目前的操作完成後再試一次。",
+                    "現在の処理が完了してから、もう一度お試しください。",
                 ),
                 parent=self.root,
             )
             return
         confirmed = messagebox.askyesno(
-            self._t("Confirm database reset", "確認清空資料庫"),
+            self._t(
+                "Confirm database reset",
+                "確認清空資料庫",
+                "データベース消去の確認",
+            ),
             self._t(
                 "This permanently deletes every snapshot, change event, and account "
                 "history.\n\nThe Instagram login session will be preserved. The next "
@@ -732,6 +877,10 @@ class TrackerGUI:
                 "這會永久刪除所有 Snapshot、變動事件與帳號歷史。\n\n"
                 "Instagram 登入狀態不會被刪除。清空後，下一次掃描會建立新的初始 "
                 "Snapshot。\n\n確定要繼續嗎？",
+                "すべてのスナップショット、変更イベント、アカウント履歴が完全に"
+                "削除されます。\n\nInstagram のログインセッションは保持されます。"
+                "次回のスキャンでは新しい最初のスナップショットが作成されます。"
+                "\n\n続行しますか？",
             ),
             icon="warning",
             parent=self.root,
@@ -743,9 +892,13 @@ class TrackerGUI:
         except DatabaseError as exc:
             LOGGER.exception("Could not clear tracker database")
             messagebox.showerror(
-                self._t("Reset failed", "清空失敗"), str(exc), parent=self.root
+                self._t("Reset failed", "清空失敗", "消去に失敗しました"),
+                str(exc),
+                parent=self.root,
             )
-            self.status_text.set(self._t("Reset failed", "清空失敗"))
+            self.status_text.set(
+                self._t("Reset failed", "清空失敗", "消去に失敗しました")
+            )
             return
 
         result = self._t(
@@ -758,11 +911,20 @@ class TrackerGUI:
             f"已刪除 Snapshot：{snapshot_count}\n"
             f"已刪除帳號資料：{account_count}\n\n"
             "登入狀態仍保留。請執行一次掃描來建立新的初始 Snapshot。",
+            "データベースを消去しました。\n\n"
+            f"削除したスナップショット：{snapshot_count}\n"
+            f"削除したアカウント：{account_count}\n\n"
+            "ログインセッションは保持されています。スキャンを実行して新しい最初の"
+            "スナップショットを作成してください。",
         )
         self._set_output(result)
-        self.status_text.set(self._t("Database cleared", "資料庫已清空"))
+        self.status_text.set(
+            self._t("Database cleared", "資料庫已清空", "データベースを消去しました")
+        )
         messagebox.showinfo(
-            self._t("Reset complete", "清空完成"), result, parent=self.root
+            self._t("Reset complete", "清空完成", "消去完了"),
+            result,
+            parent=self.root,
         )
 
     def _format_history(self, history: AccountHistory) -> str:
@@ -770,10 +932,11 @@ class TrackerGUI:
             self._t(
                 f"History for @{history.username}",
                 f"@{history.username} 的歷史",
+                f"@{history.username} の履歴",
             ),
             history.profile_url,
             "",
-            self._t("Relationship timeline", "關係變化"),
+            self._t("Relationship timeline", "關係變化", "関係の履歴"),
         ]
         previous_state: tuple[bool, bool] | None = None
         for state in history.states:
@@ -786,9 +949,15 @@ class TrackerGUI:
             )
             previous_state = current_state
 
-        lines.extend(("", self._t("Events", "事件")))
+        lines.extend(("", self._t("Events", "事件", "イベント")))
         if not history.events:
-            lines.append(self._t("No change events recorded.", "尚無變動事件。"))
+            lines.append(
+                self._t(
+                    "No change events recorded.",
+                    "尚無變動事件。",
+                    "変更イベントは記録されていません。",
+                )
+            )
         else:
             for event in history.events:
                 lines.append(
@@ -800,10 +969,11 @@ class TrackerGUI:
 
     def _on_close(self) -> None:
         if self._busy and not messagebox.askyesno(
-            self._t("Task still running", "工作仍在執行"),
+            self._t("Task still running", "工作仍在執行", "処理を実行中です"),
             self._t(
                 "A background task is still running. Close the window anyway?",
                 "目前仍有工作在背景執行。確定要關閉視窗嗎？",
+                "バックグラウンド処理を実行中です。それでもウィンドウを閉じますか？",
             ),
             parent=self.root,
         ):
